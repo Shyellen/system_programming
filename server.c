@@ -1,72 +1,55 @@
-// remote find -- server
-
 #include <stdio.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <time.h>
-#include <strings.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <ctype.h>
 
-#define PORTNUM 15000
-#define HOSTLEN 256
 #define oops(msg)   {perror(msg); exit(1);}
 
 int main(int ac, char *av[])
 {
-        struct sockaddr_in saddr;
-        struct hostent *hp;
-        char hostname[HOSTLEN];
-        int sock_id, sock_fd;
-        int n_read;
-        char buffer[BUFSIZ];
+	int serv_sock, clnt_sock, str_len;
+	struct sockaddr_in serv_adr;
+	char message[BUFSIZ];		/* to receive message	*/
 
-/*
-        if(ac != 3){
-                printf("Usage : %s <PORT> <dirname>\n", av[0]);
-                exit(1);
-        }
-*/
-        //socket()
-        sock_id = socket(PF_INET, SOCK_STREAM, 0);
-        if(sock_id == -1)
-                oops("socket");
+	if(ac != 3) {
+		printf("Usage : %s <PORT> <DIRECTORY>\n", av[0]);
+		exit(1);
+	}
 
-        //bind()
-        bzero((void *)&saddr, sizeof(saddr));
-        gethostname(hostname, HOSTLEN);
-        hp = gethostbyname(hostname);
-        bcopy((void*)hp->h_addr, (void*)&saddr.sin_addr, hp->h_length);
-        saddr.sin_port=htons(PORTNUM);
-        //saddr.sin_port=htons(atoi(av[1]));
-        saddr.sin_family = AF_INET;
-        saddr.sin_addr.s_addr=htonl(INADDR_ANY);
-        if(bind(sock_id, (struct sockaddr *)&saddr, sizeof(saddr)) != 0)
-                oops("bind");
+	serv_sock = socket(PF_INET, SOCK_STREAM, 0);
+	if(serv_sock == -1)
+		oops("socket() error");
 
-        //listen()
-        if(listen(sock_id, 1) != 0)
-                oops("listen");
+	memset(&serv_adr, 0, sizeof(serv_adr));
+	serv_adr.sin_family = AF_INET;
+	serv_adr.sin_addr.s_addr = htonl(INADDR_ANY);
+	serv_adr.sin_port = htons(atoi(av[1]));
 
-        sock_fd = accept(sock_id, NULL, NULL);                  //accept()
-        if(sock_fd == -1)
-                oops("accept");
+	if(bind(serv_sock, (struct sockaddr*)&serv_adr, sizeof(serv_adr)) == -1)
+		oops("bind() error");
 
-        //main
-        //if(write(sock_fd, av[2], strlen(av[1])) == -1)
-        if(write(sock_fd, av[1], strlen(av[1])) == -1)          //write dirname to client
-                oops("write dirname");
-        if(write(sock_fd, "\n", 1) == -1)
-                oops("write");
+	if(listen(serv_sock, 10) != 0)
+		oops("listen() error");
 
-        while( (n_read = read(sock_fd, buffer, BUFSIZ)) > 0)    //read result
-                if(write(1, buffer, n_read) == -1)              //write to stdout
-                        oops("write");
+	while(1) {
+		clnt_sock = accept(serv_sock, NULL, NULL);
+		if(clnt_sock == -1)
+			oops("accept() error");
 
-        close(sock_id);
-        return 0;
+		if(write(clnt_sock, av[2], strlen(av[2])) == -1)
+			oops("write() error");
+		if(write(clnt_sock, "\n", 1) == -1)
+			oops("write() error");
 
+		while((str_len = read(clnt_sock, message, BUFSIZ)) > 0) {
+			if( write(1, message, str_len) == -1)
+				oops("write");
+		}
+		close(clnt_sock);
+	}
+	close(serv_sock);
+	return 0;
 }

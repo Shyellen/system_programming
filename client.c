@@ -1,94 +1,74 @@
-// remote ls -- client
-
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <strings.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
 #include <ctype.h>
-#include <fcntl.h>
 
-#define PORTNUM 15000
-#define oops(msg)               {perror(msg); exit(1);}
+#define oops(msg)		{perror(msg); exit(1);}
 
 void sanitize(char *str);
 
 int main(int ac, char *av[])
 {
-        struct sockaddr_in servadd;
-        struct hostent *hp;
-        int sock_id;
-        FILE *sock_fpi, *sock_fpo;
-        FILE *pipe_fp;
-        char dirname[BUFSIZ];
-        char command[BUFSIZ];
-        int c;
+	int sock;					/* the socket and fd	*/
+	struct sockaddr_in serv_adr;/* the number to call	*/
+	FILE *sock_fpi, *sock_fpo;
+	FILE *pipe_fp;
+	char dirname[BUFSIZ];
+	char command[BUFSIZ];
+	int str_len, c;
 
-/*
-        if(ac != 3) {
-                printf("Usage : %s <IP> <PORT>\n", av[0]);
-                exit(1);
-        }
-*/
-        //socket()
-        sock_id = socket(AF_INET, SOCK_STREAM, 0);
-        if(sock_id == -1)
-                oops("socket");
+	if(ac != 3) {
+		printf("[USAGE] %s <IP> <PORT>\n", av[0]);
+		exit(1);
+	}
 
-        //bind()
-        bzero(&servadd, sizeof(servadd));
-        hp = gethostbyname(av[1]);
-        if(hp == NULL)
-                oops(av[1]);
-        bcopy(hp->h_addr, (struct sockaddr*)&servadd.sin_addr, hp->h_length);
-        //servadd.sin_port = htons(atoi(av[2]));
-        servadd.sin_port = htons(PORTNUM);
-        servadd.sin_family = AF_INET;
+	sock = socket(PF_INET, SOCK_STREAM, 0);
+	if(sock == -1)
+		oops("socket() error");
 
-        //connect()
-        if(connect(sock_id, (struct sockaddr*)&servadd, sizeof(servadd)) != 0)
-                oops("connect");
+	memset(&serv_adr, 0, sizeof(serv_adr));
+	serv_adr.sin_family = AF_INET;
+	serv_adr.sin_addr.s_addr = inet_addr(av[1]);
+	serv_adr.sin_port=htons(atoi(av[2]));
 
-        //main
-        if((sock_fpi = fdopen(sock_id, "r")) == NULL)           //fd open for reading
-                oops("fdopen reading");
+	if(connect(sock, (struct sockaddr*)&serv_adr, sizeof(serv_adr)) != 0)
+		oops("connect() error");
+   
+	if((sock_fpi = fdopen(sock, "r")) == NULL)
+		oops("fdopen reading");
+	if(fgets(dirname, BUFSIZ-5, sock_fpi) == NULL)
+		oops("reading dirname");
 
-        if((fgets(dirname, BUFSIZ-5, sock_fpi)) == NULL)        //get dirname
-                oops("reading dirname");
+	sanitize(dirname);
 
-        sanitize(dirname);                                      //repair dirname
-        sprintf(command, "ls %s", dirname);
+	if((sock_fpo = fdopen(sock, "w")) == NULL)
+		oops("fdopen writing");
 
-        if((sock_fpo = fdopen(sock_id, "w")) == NULL)           //fd open for writing
-                oops("fdopen writing");
+	sprintf(command, "ls %s", dirname);
+	if((pipe_fp = popen(command, "r")) == NULL)
+		oops("popen() error");
+	
+	while((c=getc(pipe_fp)) != EOF)
+		putc(c, sock_fpo);
 
-        if((pipe_fp = popen(command, "r")) == NULL)             //execute command
-                oops("popen");
-
-        while( (c=getc(pipe_fp)) != EOF)                        //get result from pipe
-                putc(c, sock_fpo);                              //put to socket
-
-
-        //close
-        pclose(pipe_fp);
-        fclose(sock_fpo);
-        fclose(sock_fpi);
-
-
-        return 0;
+	pclose(pipe_fp);
+	fclose(sock_fpo);
+	fclose(sock_fpi);
+	close(sock);
+	return 0;
 }
 
-//remove execpt slashes and alphanumber
 void sanitize(char *str) {
-        char *src, *dest;
+	char *src, *dest;
+	
+	for(src=dest=str; *src; src++) {
+		if(*src == '/' || isalnum(*src))
+			*dest++ = *src;
+	}
+	*dest = '\0';
 
-        for(src=dest=str; *src; src++) {
-                if(*src == '/' || isalnum(*src))
-                        *dest++ = *src;
-        }
-        *dest = '\0';
+	return;
 }
