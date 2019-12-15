@@ -43,6 +43,7 @@ int main(int ac, char *av[])
 		fputs("[NOTICE] New client is connected!\n", stdout);
 
 		while(1) {
+			fputs("[INPUT] input command: ", stdout);
 			fgets(command, BUFSIZ, stdin);
 
 			if(write(clnt_sock, command, strlen(command)) == -1)
@@ -58,7 +59,7 @@ int main(int ac, char *av[])
 			//}
 		}
 		close(clnt_sock);
-		fputs("[NOTICE] Disconnected.\n", stdout);
+		fputs("[NOTICE] Client disconnected.\n", stdout);
 	}
 	close(serv_sock);
 	return 0;
