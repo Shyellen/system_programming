@@ -86,10 +86,8 @@ void *recv_msg(void *arg)
 			oops("read() error");
 		command[str_len-1]=0;
 
-		if(!strcmp(command, "q")) {
-			close(sock);
+		if(!strcmp(command, "q"))
 			exit(1);
-		}
 
 		com[i] = strtok(command, " ");
 		while(com[i] != NULL)
