@@ -36,24 +36,29 @@ int main(int ac, char *av[])
 		oops("listen() error");
 
 	while(1) {
+		fputs("[NOTICE] Waiting for clients...\n", stdout);
 		clnt_sock = accept(serv_sock, NULL, NULL);
 		if(clnt_sock == -1)
 			oops("accept() error");
-		fputs("[NOTICE] New client is connected\n", stdout);
+		fputs("[NOTICE] New client is connected!\n", stdout);
 
 		while(1) {
 			fgets(command, BUFSIZ, stdin);
-			printf("[DEBUG] command: %s\n", command);
 
 			if(write(clnt_sock, command, strlen(command)) == -1)
 				oops("write() error");
 
+			if(!strcmp(command, "q\n")) {
+				sleep(1);
+				break;
+			}
 			//while((str_len = read(clnt_sock, message, BUFSIZ)) > 0) {
 			//	if( write(1, message, str_len) == -1)
 			//		oops("write() error");
 			//}
 		}
 		close(clnt_sock);
+		fputs("[NOTICE] Disconnected.\n", stdout);
 	}
 	close(serv_sock);
 	return 0;
