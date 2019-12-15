@@ -55,8 +55,6 @@ void *send_msg(void *arg)
 	int sock=*((int*)arg);
 	char result[BUFSIZ];
 
-	printf("[DEBUG] This is send function.\n");
-
 	//if(dup2(rpipe[0], 0) == -1)
 	//	oops("dup2() stdin error");
 	//close(rpipe[0]);
@@ -74,8 +72,6 @@ void *recv_msg(void *arg)
 	char *com[100], command[BUFSIZ];
 	int str_len, pid, i=0;
 
-	printf("[DEBUG] This is recv function.\n");
-
 	//if(dup2(rpipe[1], 1) == -1)
 	//	oops("dup2() stdout error");
 	//close(rpipe[1]);
@@ -89,6 +85,11 @@ void *recv_msg(void *arg)
 		if(str_len==-1) 
 			oops("read() error");
 		command[str_len-1]=0;
+
+		if(!strcmp(command, "q")) {
+			close(sock);
+			exit(1);
+		}
 
 		com[i] = strtok(command, " ");
 		while(com[i] != NULL)
