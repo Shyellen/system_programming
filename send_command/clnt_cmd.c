@@ -39,13 +39,23 @@ int main(int ac, char *av[])
 
 	if(connect(sock, (struct sockaddr*)&serv_adr, sizeof(serv_adr)) != 0)
 		oops("connect() error");
-	printf("Successfully connected.\n");
+	printf("[NOTICE] Successfully connected.\n");
+
+	if(pipe(rpipe) == -1)
+		oops("pipe() error");
+
+	if(dup2(rpipe[0], 0) == -1)
+		oops("dup2() 0 error");
+	close(rpipe[0]);
+	if(dup2(rpipe[1], 1) == -1)
+		oops("dup2() 1 error");
+	close(rpipe[1]);	
 
 	pthread_create(&snd_thread, NULL, send_msg, (void*)&sock);
 	pthread_create(&rcv_thread, NULL, recv_msg, (void*)&sock);
 	pthread_join(snd_thread, NULL);
 	pthread_join(rcv_thread, NULL);
-	
+
 	close(sock);  
 	return 0;
 }
@@ -53,14 +63,11 @@ int main(int ac, char *av[])
 void *send_msg(void *arg)
 {
 	int sock=*((int*)arg);
+	int str_len;
 	char result[BUFSIZ];
 
-	//if(dup2(rpipe[0], 0) == -1)
-	//	oops("dup2() stdin error");
-	//close(rpipe[0]);
-
 	while(1) {
-		fgets(result, BUFSIZ, stdin);
+		str_len = read(0, result, BUFSIZ);
 		write(sock, result, strlen(result));
 	}
 	return NULL;
@@ -72,15 +79,11 @@ void *recv_msg(void *arg)
 	char *com[100], command[BUFSIZ];
 	int str_len, pid, i=0;
 
-	//if(dup2(rpipe[1], 1) == -1)
-	//	oops("dup2() stdout error");
-	//close(rpipe[1]);
-
 	while(1)
 	{
 		for(i=i; i>=0; i--)
 			com[i] = 0;
-		i=0;
+		
 		str_len=read(sock, command, BUFSIZ);
 		if(str_len==-1) 
 			oops("read() error");
@@ -89,6 +92,7 @@ void *recv_msg(void *arg)
 		if(!strcmp(command, "q"))
 			exit(1);
 
+		i=0;
 		com[i] = strtok(command, " ");
 		while(com[i] != NULL)
 			com[++i] = strtok(NULL, " ");
