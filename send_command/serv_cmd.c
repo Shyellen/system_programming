@@ -50,16 +50,21 @@ int main(int ac, char *av[])
 				oops("write() error");
 
 			if(!strcmp(command, "q\n")) {
+				fputs("[NOTICE] Disconnecting...\n", stdout);
 				sleep(1);
 				break;
 			}
-			//while((str_len = read(clnt_sock, message, BUFSIZ)) > 0) {
-			//	if( write(1, message, str_len) == -1)
-			//		oops("write() error");
-			//}
+			while(1) {
+				str_len = read(clnt_sock, message, BUFSIZ);
+				if(str_len == -1)
+					oops("read() error");
+				if(write(1, message, str_len) == -1)
+					oops("write() error");
+				if(str_len < BUFSIZ)
+					break;
+			}
 		}
 		close(clnt_sock);
-		fputs("[NOTICE] Client disconnected.\n", stdout);
 	}
 	close(serv_sock);
 	return 0;
