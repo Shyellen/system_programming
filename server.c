@@ -6,23 +6,23 @@
 #include <sys/socket.h>
 #include <ctype.h>
 #include <pthread.h>
+#include <fcntl.h>
 
 #define oops(msg)   {perror(msg); exit(1);}
 #define MAX_CLNT 256
 
 void * handle_clnt(void * arg);
+void *get_command(void *a);
 
 int clnt_cnt = 0;
 int clnt_socks[MAX_CLNT];
 pthread_mutex_t mutx;
-char command[BUFSIZ];
 
 int main(int ac, char *av[])
 {
-	int serv_sock, clnt_sock, str_len, i;
+	int serv_sock, clnt_sock, str_len;
 	struct sockaddr_in serv_adr;
-	char message[BUFSIZ];		/* to receive message	*/
-	pthread_t t_id;
+	pthread_t t_id, sender;
 
 	if(ac != 2) {
 		printf("[USAGE] %s <PORT>\n", av[0]);
@@ -45,26 +45,13 @@ int main(int ac, char *av[])
 	if(listen(serv_sock, 10) != 0)
 		oops("listen() error");
 
-	fputs("[INPUT] Input command: ", stdout);
-	fgets(command, BUFSIZ, stdin);
-	for(i=0; i < BUFSIZ ; i++){
-		if(command[i] == '\n'){
-			command[i] = 0;
-			break;
-		}
-	}
-	printf("[DEBUG] Command is %s\n", command);
-	fflush(stdout);
-	fputs("-------------------------------\n", stdout);
-	fflush(stdout);
-
 	fputs("[NOTICE] Waiting for clients...\n", stdout);
-	fflush(stdout);
-
+	pthread_create(&sender, NULL, get_command, (void*)&ac);
+	
 	while(1)
 	{
 		clnt_sock = accept(serv_sock, NULL, NULL);
-		if( clnt_sock == -1)
+		if(clnt_sock == -1)
 			oops("accept() error");
 
 		pthread_mutex_lock(&mutx);
@@ -73,12 +60,10 @@ int main(int ac, char *av[])
 
 		pthread_create(&t_id, NULL, handle_clnt, (void*)&clnt_sock);
 		pthread_detach(t_id);
-
-		printf("[NOTICE] New client is connected! - %d\n", clnt_sock);
-		fflush(stdout);
 	}
-
+	pthread_join(sender, NULL);
 	close(serv_sock);
+
 	return 0;
 }
 
@@ -86,32 +71,75 @@ void * handle_clnt(void * arg)
 {
 	int clnt_sock = *((int*)arg);
 	int str_len=0, i;
-	//char command[BUFSIZ];
 	char message[BUFSIZ];
+	int fd;
 
-	if( write(clnt_sock, command, strlen(command)) == -1)
-		oops("write command  error");
+	printf("\n[NOTICE] New #%d client is connected.\n", clnt_sock);
 
-	//get result
-	while((str_len = read(clnt_sock, message, BUFSIZ)) != 0)
-		write(1, message, str_len);
-
-	//remove disconnected client
-	pthread_mutex_lock(&mutx);
-	for( i = 0 ; i < clnt_cnt ; i++)
-	{
-		if(clnt_sock == clnt_socks[i])
-		{
-			while( i < clnt_cnt){
-				clnt_socks[i] = clnt_socks[i+1];
-				i++;
-			}
-			break;
+	while(1) {
+		while(1) {
+			str_len = read(clnt_sock, message, BUFSIZ);
+			if(str_len == -1)
+				oops("read() error");
+			printf("[NOTICE] Client #%d result ------------------\n", clnt_sock);
+			if(write(1, message, str_len) == -1)
+					oops("write() error");
+			printf("---------------------------------------------\n");
+			if(str_len < BUFSIZ)
+					break;
 		}
 	}
-	clnt_cnt--;
-	pthread_mutex_unlock(&mutx);
-	
+
 	close(clnt_sock);
+	return NULL;
+}
+
+
+void *get_command(void *a)
+{
+	char command[BUFSIZ], i;
+	char filename[BUFSIZ];
+	char clnt_num[10];
+	int clnt, str_len;
+
+	while(1) {
+		if(clnt_cnt == 0)
+			continue;
+		sleep(1);
+		fputs("[INPUT] input command: ", stdout);
+		fgets(command, BUFSIZ, stdin);
+
+		/* copy command */
+		if(!strcmp(command, "copy\n"))
+		{	
+			command[strlen(command)-1] = 0;
+			fputs("[COPY] From which client do you want to copy? Enter number\n", stdout);
+			read(0, clnt_num, sizeof(clnt_num));
+			
+			fputs("[COPY] Enter filename!\n", stdout);
+			read(0, filename, BUFSIZ);
+
+			sprintf(command, "%s %s", command, filename);
+			
+			clnt = clnt_num[0] -'0';
+
+			if( write(clnt, command, strlen(command)) == -1)
+				oops("write() command error");
+
+		}
+
+		/* normal command  ex)ls   */
+		else
+		{
+			for(i=0; i<clnt_cnt; i++) {
+				if(write(clnt_socks[i], command, strlen(command)) == -1)
+					oops("write() command error");
+			}
+			if(!strcmp(command, "q\n")) {
+				exit(1);
+			}
+		}
+	}
+
 	return NULL;
 }
