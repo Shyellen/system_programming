@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <ctype.h>
 #include <pthread.h>
+#include <fcntl.h>
 
 #define MAXARGS	20
 #define oops(msg)		{perror(msg); exit(1);}
@@ -80,8 +81,9 @@ void *send_msg(void *arg)
 void *recv_msg(void *arg)
 {
 	int sock=*((int*)arg);
-	char *com[100], command[BUFSIZ];
+	char *com[100], command[BUFSIZ], filename[BUFSIZ], buf[BUFSIZ];
 	int str_len, pid, i=0;
+	int fd;
 
 	while(1)
 	{
@@ -91,19 +93,46 @@ void *recv_msg(void *arg)
 		str_len = read(sock, command, BUFSIZ);
 		if(str_len == -1) 
 			oops("read() error");
-		command[str_len] = 0; //strlen-1 -> strlen
-		
+		command[str_len-1] = 0;
+
+		/*	quit  */
 		if(!strcmp(command, "q"))
 			exit(1);
 
-		i=0;
-		com[i] = strtok(command, " ");
-		while(com[i] != NULL)
-			com[++i] = strtok(NULL, " ");
+		/* copy command */
+		if(!strncmp(command, "copy", 2))
+		{
+			//get filename
+			for( i = 5 ; i < str_len ; i++)
+				filename[i-5] = command[i];
 
-		pid = fork();
-		if(pid == 0)
-			execvp(com[0], com);
+			//file open, read and write to stdout(pipe)
+			fd = open( filename, O_RDONLY);
+			if( fd == -1)
+				oops("file open() error");
+			while(1){
+				str_len = read(fd, buf, BUFSIZ);
+				if(str_len == -1)
+					oops("read() error");
+				fputs(buf, stdout);
+				if(str_len < BUFSIZ)
+					break;
+			}
+			close(fd);
+		}
+
+		/* normal command  --> execvp */
+		else	
+		{
+			i=0;
+			com[i] = strtok(command, " ");
+			while(com[i] != NULL)
+				com[++i] = strtok(NULL, " ");
+
+			pid = fork();
+			if(pid == 0)
+				execvp(com[0], com);
+		}
 	}
 	return NULL;
 }
