@@ -80,7 +80,7 @@ void * handle_clnt(void * arg)
 
 	while(1) {
 		while(1) {
-			printf("Go on!\n");	//근데 이거 맨첨이 아니고 결과물 마지막에 출력됨
+			printf("Go on!\n");	
 
 			str_len = read(clnt_sock, message, BUFSIZ);
 			if(str_len == -1)
